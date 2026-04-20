@@ -1,0 +1,23 @@
+# Maven build output
+target/
+*.war
+*.jar
+
+# NetBeans specific files (keeps your personal IDE settings out of the repo)
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# IntelliJ / Eclipse (Just in case your lecturers use a different IDE to view your code)
+.idea/
+*.iml
+.settings/
+.classpath
+.project
+
+# Mac/Windows system files
+.DS_Store
+Thumbs.db
