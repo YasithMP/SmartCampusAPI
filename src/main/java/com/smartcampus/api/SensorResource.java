@@ -5,6 +5,7 @@
 package com.smartcampus.api;
 
 import com.smartcampus.data.DataStore;
+import com.smartcampus.exceptions.IllegalSensorUpdateException;
 import com.smartcampus.exceptions.LinkedResourceNotFoundException;
 import com.smartcampus.model.Room;
 import com.smartcampus.model.Sensor;
@@ -86,6 +87,10 @@ public class SensorResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
+        if (updatedSensor.getValue() != 0 && updatedSensor.getValue() != existingSensor.getValue()) {
+            throw new IllegalSensorUpdateException("Direct value updates are forbidden. Use POST /sensors/" + id + "/readings to record measurements.");
+        }
+
         if (updatedSensor.getType() == null) {
             updatedSensor.setType(existingSensor.getType());
         }
@@ -105,6 +110,7 @@ public class SensorResource {
         }
 
         updatedSensor.setId(id);
+        updatedSensor.setValue(existingSensor.getValue());
         dataStore.getSensors().put(id, updatedSensor);
 
         Room oldRoom = dataStore.getRooms().get(oldRoomId);
