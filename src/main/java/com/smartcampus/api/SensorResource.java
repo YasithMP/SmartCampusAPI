@@ -8,9 +8,12 @@ import com.smartcampus.data.DataStore;
 import com.smartcampus.model.Room;
 import com.smartcampus.model.Sensor;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -48,5 +51,46 @@ public class SensorResource {
 
         dataStore.getSensors().put(sensor.getId(), sensor);
         return Response.status(Response.Status.CREATED).entity(sensor).build();
+    }
+
+    @GET
+    @Path("/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getSensorById(@PathParam("id") String id) {
+        Sensor sensor = dataStore.getSensors().get(id);
+        if (sensor == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(sensor).build();
+    }
+
+    @PUT
+    @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response updateSensor(@PathParam("id") String id, Sensor updatedSensor) {
+        if (!dataStore.getSensors().containsKey(id)) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+
+        if (updatedSensor.getRoomId() != null) {
+            Room room = dataStore.getRooms().get(updatedSensor.getRoomId());
+            if (room == null) {
+                return Response.status(Response.Status.BAD_REQUEST).build();
+            }
+        }
+
+        updatedSensor.setId(id);
+        dataStore.getSensors().put(id, updatedSensor);
+        return Response.ok(updatedSensor).build();
+    }
+
+    @DELETE
+    @Path("/{id}")
+    public Response deleteSensor(@PathParam("id") String id) {
+        if (dataStore.getSensors().remove(id) == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.noContent().build();
     }
 }
