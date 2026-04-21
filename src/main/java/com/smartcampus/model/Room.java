@@ -12,29 +12,19 @@ import java.util.List;
  * @author YasithMP
  */
 public class Room {
-    private String id;
     private String name;
+    private String location;
     private int capacity;
-    private List<String> sensorIds;
+    private List<Sensor> sensors = new ArrayList<>();
 
     public Room() {
-        this.sensorIds = new ArrayList<>();
+        
     }
 
-    public Room(String id, String name, int capacity) {
-        this.id = id;
+    public Room(String name, String location, int capacity) {
         this.name = name;
+        this.location = location;
         this.capacity = capacity;
-        this.sensorIds = new ArrayList<>();
-    }
-
-    // Getters and Setters
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
     }
 
     public String getName() {
@@ -45,6 +35,14 @@ public class Room {
         this.name = name;
     }
 
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
     public int getCapacity() {
         return capacity;
     }
@@ -53,12 +51,12 @@ public class Room {
         this.capacity = capacity;
     }
 
-    public List<String> getSensorIds() {
-        return sensorIds;
+    public List<Sensor> getSensors() {
+        return sensors;
     }
 
-    public void setSensorIds(List<String> sensorIds) {
-        this.sensorIds = sensorIds;
+    public void setSensors(List<Sensor> sensors) {
+        this.sensors = sensors;
     }
-     
+    
 }

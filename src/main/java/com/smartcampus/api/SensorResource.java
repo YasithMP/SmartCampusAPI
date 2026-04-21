@@ -49,7 +49,9 @@ public class SensorResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
+        room.getSensors().add(sensor);
         dataStore.getSensors().put(sensor.getId(), sensor);
+        
         return Response.status(Response.Status.CREATED).entity(sensor).build();
     }
 
@@ -88,9 +90,16 @@ public class SensorResource {
     @DELETE
     @Path("/{id}")
     public Response deleteSensor(@PathParam("id") String id) {
-        if (dataStore.getSensors().remove(id) == null) {
+        Sensor sensor = dataStore.getSensors().remove(id);
+        if (sensor == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
+
+        Room room = dataStore.getRooms().get(sensor.getRoomId());
+        if (room != null) {
+            room.getSensors().removeIf(s -> s.getId().equals(id));
+        }
+
         return Response.noContent().build();
     }
 }
