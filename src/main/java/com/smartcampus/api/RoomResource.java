@@ -10,6 +10,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -41,5 +42,16 @@ public class RoomResource {
         }
         dataStore.getRooms().put(room.getName(), room);
         return Response.status(Response.Status.CREATED).entity(room).build();
+    }
+
+    @GET
+    @Path("/{name}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getRoomByName(@PathParam("name") String name) {
+        Room room = dataStore.getRooms().get(name);
+        if (room == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(room).build();
     }
 }
