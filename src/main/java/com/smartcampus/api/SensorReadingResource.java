@@ -55,7 +55,7 @@ public class SensorReadingResource {
         dataStore.getSensorReadings().putIfAbsent(sensorId, new ArrayList<>());
         dataStore.getSensorReadings().get(sensorId).add(reading);
 
-        parentSensor.setCurrentValue(reading.getValue());
+        parentSensor.setValue(reading.getValue());
 
         return Response.status(Response.Status.CREATED).entity(reading).build();
     }

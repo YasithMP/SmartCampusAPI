@@ -4,8 +4,6 @@
  */
 package com.smartcampus.model;
 
-import java.util.UUID;
-
 /**
  *
  * @author YasithMP
@@ -16,7 +14,6 @@ public class SensorReading {
     private long timestamp;
 
     public SensorReading() {
-        this.id = UUID.randomUUID().toString();
         this.timestamp = System.currentTimeMillis();
     }
 
@@ -50,5 +47,4 @@ public class SensorReading {
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
     }
-    
 }
