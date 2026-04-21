@@ -7,8 +7,10 @@ package com.smartcampus.api;
 import com.smartcampus.data.DataStore;
 import com.smartcampus.model.Room;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -53,5 +55,27 @@ public class RoomResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
         return Response.ok(room).build();
+    }
+
+    @PUT
+    @Path("/{name}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response updateRoom(@PathParam("name") String name, Room updatedRoom) {
+        if (!dataStore.getRooms().containsKey(name)) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        updatedRoom.setName(name);
+        dataStore.getRooms().put(name, updatedRoom);
+        return Response.ok(updatedRoom).build();
+    }
+
+    @DELETE
+    @Path("/{name}")
+    public Response deleteRoom(@PathParam("name") String name) {
+        if (dataStore.getRooms().remove(name) == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.noContent().build();
     }
 }
