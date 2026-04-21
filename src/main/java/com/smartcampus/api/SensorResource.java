@@ -78,15 +78,24 @@ public class SensorResource {
 
         if (updatedSensor.getType() == null) updatedSensor.setType(existingSensor.getType());
         if (updatedSensor.getStatus() == null) updatedSensor.setStatus(existingSensor.getStatus());
-        if (updatedSensor.getRoomId() == null) updatedSensor.setRoomId(existingSensor.getRoomId());
+        
+        String oldRoomId = existingSensor.getRoomId();
+        if (updatedSensor.getRoomId() == null) updatedSensor.setRoomId(oldRoomId);
 
-        Room room = dataStore.getRooms().get(updatedSensor.getRoomId());
-        if (room == null) {
+        Room newRoom = dataStore.getRooms().get(updatedSensor.getRoomId());
+        if (newRoom == null) {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
 
         updatedSensor.setId(id);
         dataStore.getSensors().put(id, updatedSensor);
+
+        Room oldRoom = dataStore.getRooms().get(oldRoomId);
+        if (oldRoom != null) {
+            oldRoom.getSensors().removeIf(s -> s.getId().equals(id));
+        }
+        newRoom.getSensors().add(updatedSensor);
+
         return Response.ok(updatedSensor).build();
     }
 
