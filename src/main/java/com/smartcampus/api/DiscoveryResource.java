@@ -9,7 +9,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -22,13 +22,13 @@ public class DiscoveryResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response discover() {
-        Map<String, Object> discoveryData = new HashMap<>();
+        Map<String, Object> discoveryData = new LinkedHashMap<>();
 
         discoveryData.put("version", "v1.0.0");
         discoveryData.put("name", "Smart Campus Management API");
         discoveryData.put("contact", "admin@westminster.ac.uk");
 
-        Map<String, String> links = new HashMap<>();
+        Map<String, String> links = new LinkedHashMap<>();
         links.put("self", "/api/v1");
         links.put("rooms", "/api/v1/rooms");
         links.put("sensors", "/api/v1/sensors");
