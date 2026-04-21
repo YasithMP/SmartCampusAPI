@@ -5,6 +5,7 @@
 package com.smartcampus.api;
 
 import com.smartcampus.data.DataStore;
+import com.smartcampus.exceptions.LinkedResourceNotFoundException;
 import com.smartcampus.model.Room;
 import com.smartcampus.model.Sensor;
 import jakarta.ws.rs.Consumes;
@@ -15,10 +16,12 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -31,8 +34,15 @@ public class SensorResource {
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getAllSensors() {
+    public Response getAllSensors(@QueryParam("type") String type) {
         List<Sensor> sensorList = new ArrayList<>(dataStore.getSensors().values());
+        
+        if (type != null && !type.trim().isEmpty()) {
+            sensorList = sensorList.stream()
+                    .filter(s -> type.equalsIgnoreCase(s.getType()))
+                    .collect(Collectors.toList());
+        }
+        
         return Response.ok(sensorList).build();
     }
 
@@ -46,7 +56,7 @@ public class SensorResource {
 
         Room room = dataStore.getRooms().get(sensor.getRoomId());
         if (room == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new LinkedResourceNotFoundException("Cannot create sensor. Room ID '" + sensor.getRoomId() + "' does not exist.");
         }
 
         room.getSensors().add(sensor);
@@ -76,15 +86,22 @@ public class SensorResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
-        if (updatedSensor.getType() == null) updatedSensor.setType(existingSensor.getType());
-        if (updatedSensor.getStatus() == null) updatedSensor.setStatus(existingSensor.getStatus());
+        if (updatedSensor.getType() == null) {
+            updatedSensor.setType(existingSensor.getType());
+        }
+        
+        if (updatedSensor.getStatus() == null) {
+            updatedSensor.setStatus(existingSensor.getStatus());
+        }
         
         String oldRoomId = existingSensor.getRoomId();
-        if (updatedSensor.getRoomId() == null) updatedSensor.setRoomId(oldRoomId);
+        if (updatedSensor.getRoomId() == null) {
+            updatedSensor.setRoomId(oldRoomId);
+        }
 
         Room newRoom = dataStore.getRooms().get(updatedSensor.getRoomId());
         if (newRoom == null) {
-            return Response.status(Response.Status.BAD_REQUEST).build();
+            throw new LinkedResourceNotFoundException("Cannot update sensor. Room ID '" + updatedSensor.getRoomId() + "' does not exist.");
         }
 
         updatedSensor.setId(id);
@@ -113,5 +130,10 @@ public class SensorResource {
         }
 
         return Response.noContent().build();
+    }
+
+    @Path("/{id}/readings")
+    public SensorReadingResource getSensorReadingResource(@PathParam("id") String id) {
+        return new SensorReadingResource(id);
     }
 }
