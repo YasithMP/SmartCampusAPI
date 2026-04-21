@@ -62,9 +62,16 @@ public class RoomResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response updateRoom(@PathParam("name") String name, Room updatedRoom) {
-        if (!dataStore.getRooms().containsKey(name)) {
+        Room existingRoom = dataStore.getRooms().get(name);
+        if (existingRoom == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
+
+        if (updatedRoom.getLocation() == null) updatedRoom.setLocation(existingRoom.getLocation());
+        if (updatedRoom.getCapacity() == 0) updatedRoom.setCapacity(existingRoom.getCapacity());
+        
+        updatedRoom.setSensors(existingRoom.getSensors());
+
         updatedRoom.setName(name);
         dataStore.getRooms().put(name, updatedRoom);
         return Response.ok(updatedRoom).build();

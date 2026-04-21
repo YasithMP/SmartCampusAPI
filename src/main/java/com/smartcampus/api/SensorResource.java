@@ -71,15 +71,18 @@ public class SensorResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response updateSensor(@PathParam("id") String id, Sensor updatedSensor) {
-        if (!dataStore.getSensors().containsKey(id)) {
+        Sensor existingSensor = dataStore.getSensors().get(id);
+        if (existingSensor == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
-        if (updatedSensor.getRoomId() != null) {
-            Room room = dataStore.getRooms().get(updatedSensor.getRoomId());
-            if (room == null) {
-                return Response.status(Response.Status.BAD_REQUEST).build();
-            }
+        if (updatedSensor.getType() == null) updatedSensor.setType(existingSensor.getType());
+        if (updatedSensor.getStatus() == null) updatedSensor.setStatus(existingSensor.getStatus());
+        if (updatedSensor.getRoomId() == null) updatedSensor.setRoomId(existingSensor.getRoomId());
+
+        Room room = dataStore.getRooms().get(updatedSensor.getRoomId());
+        if (room == null) {
+            return Response.status(Response.Status.BAD_REQUEST).build();
         }
 
         updatedSensor.setId(id);
