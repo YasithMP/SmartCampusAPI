@@ -4,23 +4,24 @@
  */
 package com.smartcampus.model;
 
+import java.util.UUID;
+
 /**
  *
  * @author YasithMP
  */
 public class SensorReading {
     private String id;
-    private String sensorId;
     private double value;
     private long timestamp;
 
     public SensorReading() {
-        
+        this.id = UUID.randomUUID().toString();
+        this.timestamp = System.currentTimeMillis();
     }
 
-    public SensorReading(String id, String sensorId, double value, long timestamp) {
+    public SensorReading(String id, double value, long timestamp) {
         this.id = id;
-        this.sensorId = sensorId;
         this.value = value;
         this.timestamp = timestamp;
     }
@@ -32,14 +33,6 @@ public class SensorReading {
 
     public void setId(String id) {
         this.id = id;
-    }
-
-    public String getSensorId() {
-        return sensorId;
-    }
-
-    public void setSensorId(String sensorId) {
-        this.sensorId = sensorId;
     }
 
     public double getValue() {

@@ -13,6 +13,7 @@ public class Sensor {
     private String type;
     private String status;
     private String roomId;
+    private double currentValue;
 
     public Sensor() {
         
@@ -57,5 +58,12 @@ public class Sensor {
     public void setRoomId(String roomId) {
         this.roomId = roomId;
     }
-    
+
+    public double getCurrentValue() {
+        return currentValue;
+    }
+
+    public void setCurrentValue(double currentValue) {
+        this.currentValue = currentValue;
+    }
 }
