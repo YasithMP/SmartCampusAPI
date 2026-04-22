@@ -6,6 +6,7 @@ package com.smartcampus.api;
 
 import com.smartcampus.data.DataStore;
 import com.smartcampus.exceptions.RoomNotEmptyException;
+import com.smartcampus.exceptions.RoomNotFoundException;
 import com.smartcampus.model.Room;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -53,7 +54,7 @@ public class RoomResource {
     public Response getRoomByName(@PathParam("name") String name) {
         Room room = dataStore.getRooms().get(name);
         if (room == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new RoomNotFoundException("Room '" + name + "' could not be found.");
         }
         return Response.ok(room).build();
     }
@@ -65,7 +66,7 @@ public class RoomResource {
     public Response updateRoom(@PathParam("name") String name, Room updatedRoom) {
         Room existingRoom = dataStore.getRooms().get(name);
         if (existingRoom == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new RoomNotFoundException("Room '" + name + "' could not be found.");
         }
 
         if (updatedRoom.getLocation() == null) updatedRoom.setLocation(existingRoom.getLocation());
@@ -84,7 +85,7 @@ public class RoomResource {
         Room room = dataStore.getRooms().get(name);
         
         if (room == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new RoomNotFoundException("Room '" + name + "' could not be found.");
         }
 
         // Logic check: Block deletion if the room still has sensors

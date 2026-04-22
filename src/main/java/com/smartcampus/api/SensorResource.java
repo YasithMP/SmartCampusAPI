@@ -7,6 +7,7 @@ package com.smartcampus.api;
 import com.smartcampus.data.DataStore;
 import com.smartcampus.exceptions.IllegalSensorUpdateException;
 import com.smartcampus.exceptions.LinkedResourceNotFoundException;
+import com.smartcampus.exceptions.SensorNotFoundException;
 import com.smartcampus.model.Room;
 import com.smartcampus.model.Sensor;
 import jakarta.ws.rs.Consumes;
@@ -72,7 +73,7 @@ public class SensorResource {
     public Response getSensorById(@PathParam("id") String id) {
         Sensor sensor = dataStore.getSensors().get(id);
         if (sensor == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new SensorNotFoundException("Sensor '" + id + "' could not be found.");
         }
         return Response.ok(sensor).build();
     }
@@ -84,7 +85,7 @@ public class SensorResource {
     public Response updateSensor(@PathParam("id") String id, Sensor updatedSensor) {
         Sensor existingSensor = dataStore.getSensors().get(id);
         if (existingSensor == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new SensorNotFoundException("Sensor '" + id + "' could not be found.");
         }
 
         if (updatedSensor.getValue() != 0 && updatedSensor.getValue() != existingSensor.getValue()) {
@@ -127,7 +128,7 @@ public class SensorResource {
     public Response deleteSensor(@PathParam("id") String id) {
         Sensor sensor = dataStore.getSensors().remove(id);
         if (sensor == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            throw new SensorNotFoundException("Sensor '" + id + "' could not be found.");
         }
 
         Room room = dataStore.getRooms().get(sensor.getRoomId());
