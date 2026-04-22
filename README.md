@@ -7,16 +7,16 @@ A fully functional RESTful API built for the University of Westminster's **Smart
 ## Tech Stack
 
 ![Java](https://img.shields.io/badge/Java-23-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
-![Jakarta REST](https://img.shields.io/badge/Jakarta%20REST-3.1-4CAF50?style=for-the-badge&logo=java&logoColor=white)
+![Jakarta EE API](https://img.shields.io/badge/Jakarta%20EE%20API-11.0.0--M1-4CAF50?style=for-the-badge&logo=java&logoColor=white)
 ![Jersey](https://img.shields.io/badge/Jersey-3.1.5-2E7D32?style=for-the-badge&logo=java&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-3.6+-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)
 ![Tomcat](https://img.shields.io/badge/Tomcat-Deployment-F8DC75?style=for-the-badge&logo=apachetomcat&logoColor=black)
-![Jackson](https://img.shields.io/badge/Jackson-JSON-yellow?style=for-the-badge&logo=json&logoColor=white)
+![JSON-B](https://img.shields.io/badge/JSON--B-via%20Jersey%20JSON%20Binding-yellow?style=for-the-badge&logo=json&logoColor=white)
 
 | Technology | Role in Project |
 | --- | --- |
 | **Java 23** | Core language used by all API classes |
-| **Jakarta REST (JAX-RS)** | Endpoint definitions using annotations such as `@GET`, `@POST`, `@Path` |
+| **Jakarta EE API 11.0.0-M1 (provided)** | Platform API dependency in `pom.xml` (`jakarta.jakartaee-api`) |
 | **Jersey 3.1.5** | Runtime implementation for Jakarta REST |
 | **Tomcat (NetBeans deploy target)** | Application server used to run the WAR |
 | **Maven** | Dependency management and build lifecycle |
@@ -117,9 +117,9 @@ Cross-cutting request/response logging is applied without polluting resource met
 Example JSON:
 ```json
 {
-  "name": "L3-01",
-  "location": "Level 3",
-  "capacity": 50,
+  "name": "5LA",
+  "location": "Level 5",
+  "capacity": 160,
   "sensors": []
 }
 ```
@@ -140,7 +140,7 @@ Example JSON:
   "id": "TEMP-01",
   "type": "Temperature",
   "status": "ACTIVE",
-  "roomId": "L3-01",
+  "roomId": "5LA",
   "value": 24.3
 }
 ```
@@ -149,16 +149,14 @@ Example JSON:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | String | Reading ID (client can send, optional in logic) |
 | `value` | double | Measured value |
-| `timestamp` | long | Epoch milliseconds (defaults to current time in no-arg constructor) |
+| `timestamp` | long | Epoch milliseconds (auto-set to current time when omitted in request body) |
 
 Example JSON:
 ```json
 {
-  "id": "R-1001",
-  "value": 24.3,
-  "timestamp": 1713600000000
+  "timestamp": 1776877483366,
+  "value": 10000.0
 }
 ```
 
@@ -197,6 +195,15 @@ Returns all rooms.
 #### `POST /api/v1/rooms`
 Creates a room.
 
+Example request body:
+```json
+{
+  "name": "5LA",
+  "location": "5th Floor",
+  "capacity": 160
+}
+```
+
 Validation currently implemented:
 - `room` body must exist
 - `room.name` must be present and non-empty
@@ -207,10 +214,17 @@ Failure:
 #### `GET /api/v1/rooms/{name}`
 Returns one room by name.
 
-- `404 Not Found` when missing
+- `404 Not Found` via `RoomNotFoundException` when missing
 
 #### `PUT /api/v1/rooms/{name}`
 Updates room fields.
+
+Example request body:
+```json
+{
+  "capacity": 200
+}
+```
 
 Behavior:
 - Preserves existing sensors list
@@ -218,14 +232,14 @@ Behavior:
 - If `capacity` is `0`, keeps previous capacity
 - Forces `name` from path parameter
 
-- `404 Not Found` when target room missing
+- `404 Not Found` via `RoomNotFoundException` when target room missing
 
 #### `DELETE /api/v1/rooms/{name}`
 Deletes room only when room has no sensors.
 
 Responses:
 - `204 No Content` on successful deletion
-- `404 Not Found` when room does not exist
+- `404 Not Found` via `RoomNotFoundException` when room does not exist
 - `409 Conflict` via `RoomNotEmptyException` when room still contains sensors
 
 ### Sensors
@@ -239,6 +253,16 @@ Optional filter:
 #### `POST /api/v1/sensors`
 Creates and links a sensor to a room.
 
+Example request body:
+```json
+{
+  "id": "SN-001",
+  "type": "Temperature",
+  "status": "Active",
+  "roomId": "5LA"
+}
+```
+
 Validation currently implemented:
 - `sensor`, `sensor.id`, and `sensor.roomId` must be non-null
 - referenced room must exist
@@ -251,10 +275,17 @@ Responses:
 #### `GET /api/v1/sensors/{id}`
 Returns sensor by ID.
 
-- `404 Not Found` when missing
+- `404 Not Found` via `SensorNotFoundException` when missing
 
 #### `PUT /api/v1/sensors/{id}`
 Updates sensor metadata and/or room assignment.
+
+Example request body:
+```json
+{
+  "status": "Active"
+}
+```
 
 Rule enforcement:
 - Direct measurement mutation is blocked through this endpoint.
@@ -269,7 +300,7 @@ Additional behavior:
 Responses:
 - `200 OK`
 - `403 Forbidden` via `IllegalSensorUpdateException`
-- `404 Not Found` if sensor missing
+- `404 Not Found` via `SensorNotFoundException` if sensor missing
 - `422 Unprocessable Entity` if target room does not exist
 
 #### `DELETE /api/v1/sensors/{id}`
@@ -277,7 +308,7 @@ Deletes sensor and removes it from parent room list.
 
 Responses:
 - `204 No Content`
-- `404 Not Found`
+- `404 Not Found` via `SensorNotFoundException`
 
 ### Sensor Readings
 
@@ -292,11 +323,27 @@ Behavior:
 2. Blocks when status is `MAINTENANCE` or `OFFLINE`
 3. Appends reading to in-memory list
 4. Copies reading value to sensor's latest `value`
+5. Returns the created reading object; when `timestamp` is omitted, response includes server-side current timestamp
 
 Responses:
 - `201 Created`
 - `404 Not Found` with JSON error if sensor missing
 - `403 Forbidden` via `SensorUnavailableException` when sensor unavailable
+
+Example request body:
+```json
+{
+  "value": 10000.0
+}
+```
+
+Example `201 Created` response body:
+```json
+{
+  "timestamp": 1776877883631,
+  "value": 10000.0
+}
+```
 
 ---
 
@@ -306,6 +353,8 @@ Responses:
 
 | Exception Class | HTTP Status | Trigger |
 | --- | --- | --- |
+| `RoomNotFoundException` | `404 Not Found` | Room lookup failed on `GET/PUT/DELETE /rooms/{name}` |
+| `SensorNotFoundException` | `404 Not Found` | Sensor lookup failed on `GET/PUT/DELETE /sensors/{id}` |
 | `RoomNotEmptyException` | `409 Conflict` | Deleting room that still contains sensors |
 | `LinkedResourceNotFoundException` | `422 Unprocessable Entity` | Creating/updating sensor with invalid `roomId` |
 | `SensorUnavailableException` | `403 Forbidden` | Posting readings to `MAINTENANCE`/`OFFLINE` sensor |
@@ -336,14 +385,18 @@ SmartCampusAPI/
 |   |   `-- mappers/
 |   |       |-- IllegalSensorUpdateMapper.java
 |   |       |-- LinkedResourceNotFoundExceptionMapper.java
+|   |       |-- RoomNotFoundMapper.java
 |   |       |-- RoomNotEmptyMapper.java
+|   |       |-- SensorNotFoundMapper.java
 |   |       `-- SensorUnavailableExceptionMapper.java
 |   |-- config/RestApplication.java
 |   |-- data/DataStore.java
 |   |-- exceptions/
 |   |   |-- IllegalSensorUpdateException.java
 |   |   |-- LinkedResourceNotFoundException.java
+|   |   |-- RoomNotFoundException.java
 |   |   |-- RoomNotEmptyException.java
+|   |   |-- SensorNotFoundException.java
 |   |   `-- SensorUnavailableException.java
 |   `-- model/
 |       |-- Room.java
@@ -401,21 +454,21 @@ curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/
 # Create room
 curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/rooms \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"L3-01\",\"location\":\"Level 3\",\"capacity\":50}"
+  -d "{\"name\":\"5LA\",\"location\":\"Level 3\",\"capacity\":50}"
 
 # List rooms
 curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/rooms
 
 # Get room by name
-curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/rooms/L3-01
+curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/rooms/5LA
 
 # Update room
-curl -X PUT http://localhost:8080/SmartCampusAPI/api/v1/rooms/L3-01 \
+curl -X PUT http://localhost:8080/SmartCampusAPI/api/v1/rooms/5LA \
   -H "Content-Type: application/json" \
   -d "{\"location\":\"Main Building\",\"capacity\":60}"
 
 # Delete room (works only if room has no sensors)
-curl -X DELETE http://localhost:8080/SmartCampusAPI/api/v1/rooms/L3-01
+curl -X DELETE http://localhost:8080/SmartCampusAPI/api/v1/rooms/5LA
 ```
 
 ### Sensors
@@ -424,7 +477,7 @@ curl -X DELETE http://localhost:8080/SmartCampusAPI/api/v1/rooms/L3-01
 # Create sensor
 curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors \
   -H "Content-Type: application/json" \
-  -d "{\"id\":\"TEMP-01\",\"type\":\"Temperature\",\"status\":\"ACTIVE\",\"roomId\":\"L3-01\"}"
+  -d "{\"id\":\"TEMP-01\",\"type\":\"Temperature\",\"status\":\"ACTIVE\",\"roomId\":\"5LA\"}"
 
 # List all sensors
 curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/sensors
@@ -435,7 +488,7 @@ curl -X GET "http://localhost:8080/SmartCampusAPI/api/v1/sensors?type=temperatur
 # Update sensor metadata (value update blocked here)
 curl -X PUT http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01 \
   -H "Content-Type: application/json" \
-  -d "{\"type\":\"Temperature\",\"status\":\"MAINTENANCE\",\"roomId\":\"L3-01\"}"
+  -d "{\"type\":\"Temperature\",\"status\":\"MAINTENANCE\",\"roomId\":\"5LA\"}"
 
 # Delete sensor
 curl -X DELETE http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01
@@ -450,28 +503,30 @@ curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01/readings
 # Add reading (updates sensor.value)
 curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01/readings \
   -H "Content-Type: application/json" \
-  -d "{\"id\":\"R-001\",\"value\":24.5}"
+  -d "{\"value\":24.5}"
 ```
 
 ### Triggering Rule Errors
 
 ```bash
 # 409: delete room that still has sensors
-curl -X DELETE http://localhost:8080/SmartCampusAPI/api/v1/rooms/L3-01
+curl -X DELETE http://localhost:8080/SmartCampusAPI/api/v1/rooms/5LA
 
 # 422: create sensor with invalid roomId
 curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors \
   -H "Content-Type: application/json" \
   -d "{\"id\":\"CO2-01\",\"type\":\"CO2\",\"roomId\":\"NON-EXISTENT\"}"
 
-# 403: post reading to unavailable sensor
-curl -X PUT http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01 \
-  -H "Content-Type: application/json" \
-  -d "{\"status\":\"OFFLINE\",\"roomId\":\"L3-01\"}"
+# 404: get room that does not exist
+curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/rooms/NO-SUCH-ROOM
 
+# 404: get sensor that does not exist
+curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/sensors/NO-SUCH-SENSOR
+
+# 403: post reading to a sensor under maintenance
 curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01/readings \
   -H "Content-Type: application/json" \
-  -d "{\"id\":\"R-002\",\"value\":19.0}"
+  -d "{\"value\":19.0}"
 ```
 
 ---
@@ -524,7 +579,3 @@ When creating/updating a sensor with a non-existent `roomId`, the endpoint itsel
 Raw stack traces leak internals such as package structure, library usage, and logic flow. Attackers can use this intelligence for targeted exploitation. This project mitigates exposure by mapping known business exceptions to controlled JSON error responses and keeping detailed technical traces in server-side logs.
 
 ---
-
-## Final Compliance Note
-
-This README reflects the **actual code currently implemented** in this repository (endpoints, status codes, models, and deployment style), while following the coursework-report formatting style demonstrated in your reference README.
