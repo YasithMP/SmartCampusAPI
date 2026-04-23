@@ -34,6 +34,12 @@ public class LoggingFilter implements ContainerRequestFilter, ContainerResponseF
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) throws IOException {
         int status = responseContext.getStatus();
         
+        if (status >= 400 && status < 500) {
+            LOGGER.log(Level.WARNING, "!!! [CLIENT ERROR] Status: {0} | Entity: {1}", new Object[]{status, responseContext.getEntity()});
+        } else if (status >= 500) {
+            LOGGER.log(Level.SEVERE, "!!! [SERVER ERROR] Status: {0} | Entity: {1}", new Object[]{status, responseContext.getEntity()});
+        }
+        
         LOGGER.log(Level.INFO, "<<< [RESPONSE] Status: {0}", status);
     }
 }
