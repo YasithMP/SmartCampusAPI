@@ -37,7 +37,8 @@ The API acts as a campus infrastructure backend and supports:
   - Prevent direct sensor value mutation via `PUT /sensors/{id}`
   - Prevent posting readings when sensor status is `MAINTENANCE` or `OFFLINE`
 - **Clean error responses**: custom exception mappers return JSON error bodies
-- **API observability**: request/response filter logs HTTP method, URI, and response status
+- **API observability**: request/response filter logs HTTP method, URI, response status, and escalates failed responses to warning/severe levels
+- **Global server-failure handling**: uncaught runtime errors are mapped to a sanitized `500` JSON response
 
 ---
 
@@ -52,6 +53,7 @@ HTTP Request
      |
 [Resource Layer]
   - DiscoveryResource
+  - CrashTestResource
   - RoomResource
   - SensorResource
   - SensorReadingResource (sub-resource)
@@ -345,6 +347,23 @@ Example `201 Created` response body:
 }
 ```
 
+### Crash Test
+
+#### `GET /api/v1/crash`
+Deliberately triggers an unhandled runtime failure for testing global exception handling.
+
+Behavior:
+- Throws a `NullPointerException` intentionally inside the endpoint
+- Is handled by `GlobalExceptionMapper`
+- Returns a sanitized `500 Internal Server Error` JSON body instead of exposing stack traces
+
+Example response (`500 Internal Server Error`):
+```json
+{
+  "error": "An unexpected internal server error occurred. Please try again later."
+}
+```
+
 ---
 
 ## Error Handling
@@ -353,6 +372,7 @@ Example `201 Created` response body:
 
 | Exception Class | HTTP Status | Trigger |
 | --- | --- | --- |
+| `Throwable` (via `GlobalExceptionMapper`) | `500 Internal Server Error` | Any uncaught exception not handled by specific mappers |
 | `RoomNotFoundException` | `404 Not Found` | Room lookup failed on `GET/PUT/DELETE /rooms/{name}` |
 | `SensorNotFoundException` | `404 Not Found` | Sensor lookup failed on `GET/PUT/DELETE /sensors/{id}` |
 | `RoomNotEmptyException` | `409 Conflict` | Deleting room that still contains sensors |
@@ -377,12 +397,14 @@ SmartCampusAPI/
 |-- pom.xml
 |-- src/main/java/com/smartcampus/
 |   |-- api/
+|   |   |-- CrashTestResource.java
 |   |   |-- DiscoveryResource.java
 |   |   |-- RoomResource.java
 |   |   |-- SensorResource.java
 |   |   |-- SensorReadingResource.java
 |   |   |-- filters/LoggingFilter.java
 |   |   `-- mappers/
+|   |       |-- GlobalExceptionMapper.java
 |   |       |-- IllegalSensorUpdateMapper.java
 |   |       |-- LinkedResourceNotFoundExceptionMapper.java
 |   |       |-- RoomNotFoundMapper.java
@@ -392,6 +414,7 @@ SmartCampusAPI/
 |   |-- config/RestApplication.java
 |   |-- data/DataStore.java
 |   |-- exceptions/
+|   |   |-- GlobalException.java
 |   |   |-- IllegalSensorUpdateException.java
 |   |   |-- LinkedResourceNotFoundException.java
 |   |   |-- RoomNotFoundException.java
@@ -431,6 +454,20 @@ http://localhost:8080/SmartCampusAPI/api/v1/
 
 ### Build Verification
 A Maven package build has been verified successfully in this environment using the project `pom.xml`.
+
+### Expert Setup Evidence
+- Maven packaging is `war`, suitable for servlet-container deployment.
+- JAX-RS/Jakarta REST setup is provided by Jersey dependencies: `jersey-container-servlet`, `jersey-hk2`, and `jersey-media-json-binding`.
+- Jakarta EE API is declared as `provided`, which matches container-managed runtime behavior.
+- API base path is centrally configured using:
+
+```java
+@ApplicationPath("/api/v1")
+public class RestApplication extends Application {
+}
+```
+
+This guarantees that all resource URIs are rooted at `/api/v1` and keeps URI versioning explicit.
 
 ---
 
@@ -527,6 +564,9 @@ curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/sensors/NO-SUCH-SENSOR
 curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01/readings \
   -H "Content-Type: application/json" \
   -d "{\"value\":19.0}"
+
+# 500: trigger intentional crash endpoint
+curl -X GET http://localhost:8080/SmartCampusAPI/api/v1/crash
 ```
 
 ---
@@ -538,6 +578,7 @@ curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01/reading
 - **Thread safety**: `ConcurrentHashMap` used for shared collections
 - **Bidirectional room-sensor link**: sensor create/update/delete also updates parent room sensor list
 - **No seeded dataset in current code**: `DataStore` constructor does not preload rooms/sensors/readings
+- **`/crash` endpoint is test-only**: designed to validate `500` handling and logging, not for production use
 
 ---
 
@@ -552,30 +593,109 @@ curl -X POST http://localhost:8080/SmartCampusAPI/api/v1/sensors/TEMP-01/reading
 ## Conceptual Report - Question Answers
 
 ### Part 1.1 - JAX-RS Resource Lifecycle
-By default, Jakarta REST resources are request-scoped. A new instance of classes like `RoomResource` or `SensorResource` is created per request and then discarded. Because of this, request classes cannot safely hold durable shared state. This project uses a singleton `DataStore` to persist in-memory state across requests. Since requests may execute concurrently, thread-safe collections (`ConcurrentHashMap`) are used to reduce race-condition risk during multi-user access.
+In JAX-RS, resource classes are request-scoped unless you do something different yourself. So for each HTTP request, Jersey creates a fresh resource object and throws it away after the response. That keeps things stateless, but it also means you should not store shared state inside the resource class.
+
+In my API, I keep shared state in a singleton `DataStore`, and I keep request logic inside the resource classes. The maps inside `DataStore` are `ConcurrentHashMap`, so normal map operations are safe across concurrent requests.
+
+What this already gives me:
+- Safe concurrent `get/put/remove` operations on core maps.
+- Clear place for domain checks (for example, preventing invalid room-sensor transitions).
+
+If this system had to scale further, I would harden synchronisation with:
+- `compute` / `computeIfPresent` style updates for atomic multi-step changes.
+- Lock-per-room (or `ReadWriteLock`) for cross-collection invariants.
+- Strict pre-validation before mutation so partial updates cannot happen.
+- Read snapshots for heavy read endpoints.
 
 ### Part 1.2 - HATEOAS and Hypermedia
-The discovery endpoint (`GET /api/v1/`) returns navigable links (`self`, `rooms`, `sensors`). This supports basic hypermedia discoverability: clients can start from one entry point and discover available collections. Compared with hardcoded URL assumptions, this reduces client coupling when route structures evolve.
+My discovery endpoint (`GET /api/v1/`) returns version info, contact info, and links to main resources. In practice, this acts like a live API index.
+
+Why I think this is useful:
+- Clients can start from one known URL and discover routes instead of hardcoding everything.
+- If paths change later, the runtime response is still the source of truth.
+- Tooling can test discoverability directly from the root response.
+- Version metadata in the same response helps with safer client upgrades.
 
 ### Part 2.1 - Returning IDs Only vs Full Objects
-Returning only IDs reduces payload size but causes additional round-trips to fetch details (N+1 effect). Returning full objects increases payload size but improves client efficiency for common UI use cases. For a campus-scale in-memory coursework API, full object responses are reasonable and simplify client integration.
+If I return only IDs, each response is smaller, but clients usually have to make extra calls to get details (classic N+1 problem). If I return full objects, payloads are bigger, but clients can do more with fewer requests.
+
+So the trade-off is basically:
+- IDs only: lower payload per call, more client-side orchestration.
+- Full objects: bigger payloads, fewer round-trips.
+
+For this coursework API, I chose full objects because entities are not huge and it keeps client code simple. If the dataset got much larger, a hybrid response shape would make more sense.
 
 ### Part 2.2 - Idempotency of DELETE
-`DELETE` is idempotent with respect to server state. Example: deleting an existing room once removes it; repeating the same delete keeps the state unchanged (room still absent), even if response codes differ (first success, then 404). Also, repeated delete attempts on non-empty rooms consistently fail without changing server state.
+`DELETE` here is idempotent from a state perspective, even if the status code can change across retries.
+
+For `DELETE /rooms/{name}`:
+1. If the room exists and is empty, first call deletes it (`204`).
+2. Calling it again gives `404`, but nothing changes on the server.
+3. If the room still has sensors, call returns `409` and the room stays untouched.
+4. Repeating that blocked call still returns `409` with no state change.
+
+So repeated identical DELETE calls do not keep changing server state after the first transition (or after a blocked transition), which is the key idempotency requirement.
 
 ### Part 3.1 - `@Consumes` and Content-Type Mismatch
-Endpoints annotated with `@Consumes(MediaType.APPLICATION_JSON)` expect JSON request bodies. If a client sends an unsupported media type (for example `text/plain`), the runtime rejects the request with `415 Unsupported Media Type` before method business logic executes. If media type is JSON but payload is malformed, deserialization failure typically results in a `400` class error.
+`@Consumes(MediaType.APPLICATION_JSON)` means the endpoint is expecting JSON. If a client sends `text/plain` (or another unsupported media type), the JAX-RS/Jersey layer rejects it with `415 Unsupported Media Type`.
+
+That matters because:
+- Content-type problems are handled at framework level.
+- Bad media types never reach business validation.
+- If content type is JSON but the JSON is malformed, the failure typically happens at deserialization and returns `400 Bad Request`.
 
 ### Part 3.2 - `@QueryParam` vs Path-Based Filtering
-Filtering with query parameters (`/sensors?type=CO2`) is semantically correct because the base collection remains the same while query options refine results. Path-based filter segments quickly cause route explosion and conflict with identifier paths like `/sensors/{id}`. Query parameters remain optional, composable, and standards-friendly.
+For filtering a collection, query params are the right fit. `/sensors?type=CO2` still represents the sensors collection, just filtered. Path params are better for identity, like `/sensors/{id}`.
+
+Why query params work better for this:
+- Filters stay optional.
+- It is easy to combine multiple filters later.
+- It avoids route explosion.
+- It is a familiar pattern for API consumers and tools.
 
 ### Part 4.1 - Sub-Resource Locator Pattern
-`SensorResource` delegates `/sensors/{id}/readings` to `SensorReadingResource`, which keeps reading-specific logic isolated and maintains single responsibility. This improves maintainability, testing granularity, and scalability for deeper nested resources.
+`SensorResource` delegates `/{id}/readings` to a separate `SensorReadingResource` class. This keeps nested reading logic out of top-level sensor CRUD logic.
+
+Why this design helps:
+- Better separation of concerns.
+- Easier targeted testing for readings.
+- Cleaner growth path if readings need pagination/analytics later.
+- URI structure stays clean and intuitive.
+
+### Part 4.2 - Consistency Between Readings and Current Sensor Value
+In `POST /sensors/{id}/readings`, I append the new reading and then update the parent sensor's current value in the same request flow.
+
+So both views stay in sync:
+- Reading history stores the event log.
+- Sensor current value reflects the latest accepted reading.
+- Clients get consistent data whether they read the sensor or its readings.
+
+### Part 5.1 - Leak-Proof Exception Mapping (409, 422, 403)
+Exception mappers give consistent JSON error responses for business-rule failures:
+- `409 Conflict` when deleting a room that still contains sensors.
+- `422 Unprocessable Entity` when payload references a missing linked resource (`roomId`).
+- `403 Forbidden` when updates violate domain policy (direct value updates or unavailable sensor readings).
+
+Because mapping is centralized, clients see predictable status codes and a stable response shape.
 
 ### Part 5.2 - HTTP 422 vs 404 for Missing `roomId`
-When creating/updating a sensor with a non-existent `roomId`, the endpoint itself exists and the request format is understood, so `422 Unprocessable Entity` is more precise than `404`. Here, `404` would incorrectly imply the URL is missing, while `422` correctly indicates semantic payload invalidity.
+If `roomId` does not exist during sensor create/update, the endpoint itself is still valid and reachable. The problem is with request content, not URL routing.
+
+That is why `422 Unprocessable Entity` is more accurate than `404 Not Found`.
+
+Client impact:
+- `404` can mislead debugging toward path mistakes.
+- `422` tells the client to fix payload semantics.
+- Retry logic is cleaner because route errors and data errors are separated.
 
 ### Part 5.4 - Security Risk of Exposing Stack Traces
-Raw stack traces leak internals such as package structure, library usage, and logic flow. Attackers can use this intelligence for targeted exploitation. This project mitigates exposure by mapping known business exceptions to controlled JSON error responses and keeping detailed technical traces in server-side logs.
+Raw stack traces in API responses leak useful internal details (package structure, framework clues, call flow), and that can help attackers profile the system.
+
+In this project:
+- Specific mappers convert known domain failures into controlled JSON responses.
+- A catch-all `ExceptionMapper<Throwable>` guarantees an intentionally generic `500` payload.
+- Detailed diagnostics are retained in server logs (for maintainers) rather than exposed to remote clients.
+
+Result: clients get clean and minimal errors, while debugging detail stays server-side.
 
 ---
