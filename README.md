@@ -688,6 +688,11 @@ Client impact:
 - `422` tells the client to fix payload semantics.
 - Retry logic is cleaner because route errors and data errors are separated.
 
+### Part 5.3 - State Constraint (403) Implementation Note
+This task does not include a separate conceptual report question in the brief, but it is implemented in the API behavior.
+
+When a sensor is in `MAINTENANCE` or `OFFLINE`, posting a new reading raises `SensorUnavailableException`, and the mapper returns `403 Forbidden` with a controlled JSON error body.
+
 ### Part 5.4 - Security Risk of Exposing Stack Traces
 Raw stack traces in API responses leak useful internal details (package structure, framework clues, call flow), and that can help attackers profile the system.
 
@@ -697,5 +702,19 @@ In this project:
 - Detailed diagnostics are retained in server logs (for maintainers) rather than exposed to remote clients.
 
 Result: clients get clean and minimal errors, while debugging detail stays server-side.
+
+### Part 5.5 - Why JAX-RS Filters Are Better for Logging Cross-Cutting Concerns
+For concerns like request/response logging, JAX-RS filters are better than adding `Logger.info()` inside every resource method because they centralize behavior in one place.
+
+In this project, `LoggingFilter` automatically runs for all endpoints, so logging stays consistent without repeating code in each room/sensor/readings handler.
+
+Main advantages:
+- **Consistency:** same log format and severity policy across all routes.
+- **Separation of concerns:** resource methods stay focused on domain logic, not infrastructure logging code.
+- **Lower maintenance cost:** changes to log structure, masking, or policy happen once in the filter.
+- **Fewer omissions:** new endpoints are logged automatically, which avoids human error when developers forget manual log statements.
+- **Better lifecycle coverage:** filters can log both incoming request metadata and outgoing status codes, including failures handled by exception mappers.
+
+So filters provide cleaner resource classes and more reliable observability as the API grows.
 
 ---
